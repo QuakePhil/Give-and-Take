@@ -7,6 +7,7 @@ now you can run that and play it in text mode
 to avoid re-generating all those bitbases (which aren't really used yet anyway) bunzip the bitbases.dat.bz2
 
 to use the web interface, make sure this directory has write privileges for the webserver user
-* for standard strength, copy this to "gnt"
+* for standard strength, copy "gntdev" to "gnt"
 * for easy strength, you will have to compile a "gntez" variant, check the code if you really want to do this...
+* that's dumb, I know :) easy strength was a hack and will be done more properly in the future (maybe.)
 
