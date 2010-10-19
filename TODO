@@ -1,0 +1,95 @@
+follow the pv for iterative deepening
+what about following the pv past the root ply?
+
+make hash work in search properly!
+Implement bestmove in the hash to use for sorting purposes
+
+pawn moves from 7th rank should be considered during quiescence search
+
+follow pv should work between bestmove() calls?
+
+smarter code - change %2 to &1 for example (watch out for precedence...)
+changing it in just 2 places in pawn_moves speeds up from 3.14 to 3.10 consistently
+
+maybe dont qsort evertyme, but implement some kind of selection sort?
+note - this will make it more difficult to cull non forced moves if forced moves exist
+
+* passed/runaway pawns
+
+extend search if there is a large jump in score between depths?
+
+the program should value 2 pawns + 0 kings as a potential king?
+or even 3 pawns + 0 kings?
+
+* during bestmove, execute a SINGLE forcing move immediately without searching
+(unless hash is turned on) if multiple forcing moves, then search as usual
+
+the clever idea to calculate moves piece-meal turns out to be not so clever
+after all, as I seem to be suffereing from significant horizon issues due to
+this.  see find_loss.pdn, execute think, doesn't find d3-c3, then execute
+pdn d3-c3 and think and the loss is found quickly...  how can we steer the
+search this way earlier?
+maybe - if only one piece is left, then quescent search should search
+all forced moves
+anyway this seems like a limitation in the search hitting horizon way too 
+early with the "clever" piece-meal move making.  a working transposition
+table may alleviate this, or a different search approach (instead of the
+traditional, leaf ply = 0, chess approach)
+maybe just extend the ply count every time a piece-meal move is searched?
+
+
+
+PV not being updated properly all the time
+(see angelica.pdn at 10 seconds after e5-f5)
+
+
+implement history and undo
+
+
+implement repetitive move detection? or are draws fine?
+
+
+compiles on windows but perft doesn't run right...
+
+
+checkbox to avoid repeating the last move?  
+
+
+when gnt.c reads the game during pdn load/pdn play etc, have it run it through
+a php script first, to strip out just the moves.  this will make putting stuff
+into the .pdn file easier
+
+
+order moves by moves to edge (promotion, sides, etc)
+remove the side positional evaluation and see how that plays into it...
+
+
+evaluate 3-piece vertical blocks on the edge as an extra king (chris suggested this)
+
+
+fix PV
+see giventake/bug.pdn
+
+
+text mode board
+
+
+currently loses basic endgame (basic_endgame.pdn)
+
+
+load known board positions from a text file or something
+consisting of state and board information
+this will then be used in evaluate (single pass for all known)
+to evaluate draws/wins
+
+confirm the perft numbers with a simpler program (php maybe?)
+
+maybe evaluate a single king with no forcing moves as a draw at best?
+
+
+favor exchanges if material plus?
+e.g. v += (favor_factor * material) / material
+(how much would these extra multiply affect speed?)
+
+
+in the endgame, piece does not come down?

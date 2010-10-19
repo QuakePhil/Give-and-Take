@@ -1,0 +1,12 @@
+Are pieces removed during jumps or after?
+(Currently implemented as during)
+
+When a piece becomes a king, does it continue its turn (capturing stuff, etc)
+(Currently implemented as no)
+
+When a piece moves, is the capture forced in which that piece can be captured
+but is not the first to be captured?
+(Currently implemented as no)
+
+If a king can take, any take, does he always have to take?
+(Currently implemented as no)

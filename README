@@ -1,0 +1,149 @@
+2010-05-12 - Rewrite of gnt with some ideas, beginning with precomputes.
+2010-05-13 - Why haven't I thought of this before?  Compute king moves
+             piece-meal, and not fully.  Should make many things easier.
+             Also started with a more pliable client-server architecture
+             help from http://home.hccnet.nl/h.g.muller/engine-intf.html
+2010-05-15 - Even the piece-meal king moves are a bit hard to weed the bugs
+             out of :) but I'm getting there
+2010-05-18 - Weeding out the final (hopefully) bugs out of the basic king
+             move generation, complete with jumps/moves and implementation
+             of tactical square forcing jumps over that square, as well as
+             active squares forcing landing square
+2010-05-19 - Created pawn moves in a similar fashion as the king moves,
+             not entirely trivial; but got the tactical square ideas to
+             work as well as this piece must move part where the sides do
+             not change but its a new move anyway.  This basically shifts
+             the complexity of move generation into more search plies,
+             but it should be faster and with a proper quiescence search
+             there same tactical ideas should emerge.
+2010-05-19 - Began writing endgame tablebase calculation
+2010-05-20 - Implemented initial buggy search.  Noted for the first time
+             that my clever idea about splitting up the chain moves into
+             separate moves that don't change sides actually throws a bit
+             of a wrench into the elegancy of minimax
+2010-05-22 - Discovered a multiple purpose bug (heh heh) when a pawn kinged
+             during a capture, it was still that pawns turn to move!  It is
+             possible that kinging wasn't even part of the bug...
+2010-05-22 - First basically working version, with more or less proper
+             quiescence search.  Not generating moves for leaf nodes now
+             also.  Counting nodes and quiescent nodes together now shows
+             a dramatically bigger nps (20k vs 100k and beyond) which is
+             most likely due to the more proper quiescent search...  Even
+             in normal search, and without the same-side-move ply bloat,
+             I am getting better depth in the search, 2-3 ply or so.
+2010-05-24 - Wrote a pdn loader and auto-mover, allowing potential automatic
+             play as well as a crude way to link to other interfaces
+2010-05-24 - Wrote a forcing move checker for "true" quiescent search and
+             found out what is evident upon a cursory reflection of the
+             nature of the game -- even at ply 1, every move has a responce
+             that is not quiescent!  Either a take or forcing move!  So to
+             avoid this ply bloat, let's only check one level of forcing
+             move(s)
+2010-05-25 - Basic hash implemented (2010-10-14 update - it still 
+             doesn't work...)
+2010-05-26 - Implemented follow pv for the root ply at the least, this
+             speeds the search up significantly, maybe 10%-40% ...?
+2010-05-26 - Realised that pawn moves from 7th rank should be considered
+             during quiescence search.  Follow PV is a bit whacky right now
+             but better to focus on proper hash usage during search which
+             will make follow PV a bit obsolete.  Also - follow PV currently
+             does not work between separate iterative deepenings, at least
+             I don't think...
+2010-05-27 - Implemented (jacked) some basic hash usage in the search which
+             seems to work, if not for the odd kooky value returned from
+             the search, e.g. 0, 0.1, 4.41!, 0, 0.2, 0, etc..  Also tried out
+             delta pruning for quiescence and in one ply it halved the nodes
+             which is also weird :X
+2010-05-28 - Made the web frontend playable... played a couple of actual
+             games and noticed that with hash on, the search was totally
+             messed up :)
+2010-06-03 - Read up a little bit on optimization, put in &1 instead of %2
+             in just two places in pawn moves and got a consistent increase
+             of about .05 seconds during a 3 second search :X maybe it will
+             be more significant if all the code is "smarter" this way.
+             Anyways I will probably rewrite this using bitboards (already
+             have a basic thingy working from some experiment a long time
+             ago)
+2010-06-14 - Came back from vacation, and played a game of the new gnt engine
+             versus the old one expecting a total massacre.  Discovered some
+             peculiar bug(s) in the search instead, it appears to be cutting
+             off winning sequences...
+2010-06-16 - Rewrote the search instead of using the chess approach of a
+             basic search with ply-1 and a separate quiesce search with ply+1
+             now it is just one search with ply+1 (easier to "read") and
+             various things can increase this depth.
+2010-06-17 - Tested with the new search, and found a bug which actually had
+             to do w the piece-meal moves.  The window was not being properly
+             maintained.  However, with some extra things toggled on, perft
+             is now 2x as slow.  There are definitely many ways to speed up
+             the code, just from the C perspective, and then of course the
+             algorithms can be better.
+2010-06-18 - Removed check for forcing (gaining back the 2x slowdown) and
+             the extra ply from this seemed to make the engine even
+             stronger (at least, able to beat its previous version)  Made
+             a tarball and so I think I'm finally ready to face off vs
+             Chris again :)
+2010-07-01 - Played some more games vs Chris yesterday, and realized how to
+             better avoid some things.  Also fixed a bug yesterday and have
+             some actual things to work on...
+2010-07-06 - Some slight/trivial but significant improvements to endgame
+             play (simply valuing the edges for kings) and also another small
+             improvement for king+pawn vs king promotions, not yet tested...
+2010-08-03 - Lost another endgame to Chris the other day, and after talking
+             a bit with the owner of k4it.de nalimov online browser, I fixed
+             some previous calculations and realised bitbase approach is more
+             feasible than I thought, so I started coding that
+2010-08-04 - Uploaded the project to google code, looks better than sf.net,
+             at least to my liking, made real headway with the bitbases
+2010-08-05 - Basic bitbase code is working, now just need to write a front
+             end browser for the data and dramatically speed up the initial
+             generation of the bitbase, particularly 3-piece and up :)
+2010-08-17 - Some basic interface to bitbases.  Note, currently, the actual
+             engine is not querying the bitbases during think/search, as I
+             have not yet verified the result bitbase data makes any sense
+             or not :)
+2010-08-18 - Opening book code, just out of interest to easily make an book
+             of opening moves to make starting games faster
+2010-08-19 - Worked enough of the bugs out of the book code to make it work
+             and generated some basic opening book moves by just setting the
+             engine to think for an hour :)
+2010-08-20 - Added a bit to automatically generate a mirrored version of the
+             opening book line.  Also smartified book move selection so the
+             moves which appear in more than one line are not more likely
+             to be seleted than moves which appear in only one line
+2010-08-24 - Created an automatic opening book generator which, given a book
+             of initial moves, creates consequitive move for the next ply
+2010-08-26 - Ran the book generator overnight a couple times and got 4-ply
+             and some 5-ply lines, realised that I can speed this up with
+             sort | uniq as well :)
+2010-08-30 - Played two games with Chris yesterday, both draws, although
+             gnt seemed to play a blunder (need to analyse...) which we
+             decided to overrule.  Looked at some graphs from kcachegrind
+             and realised that qsort was a major bottleneck, ganked some
+             insertion code from the interwebs, but after getting it to
+             work right, the nps did not improve at all, if only to become
+             slower :( (tried bubble sort too but it was even slower)
+             Also changed the order of move sort tiebreaks, not sure if
+             this speeds it up or not
+2010-08-31 - After floundering around a bit with various sorting ideas, I
+             realized that I could just have different moves arrays for
+             the three or four different types of moves that I have sorted
+             out there, so instead of sorting something like 0,0,0,1,1,1,1
+             I could instead have an array of all 0,0,0 and an array of
+             all 1,1,1,1
+2010-09-09 - Tried to get transposition table to work again, as that is
+             another area where I should be able to get significant
+             speed-up, not in nps, but in a more streamlined search tree
+             Now the issue I think is saving exact values and the next
+             ply we are still looking at the exacts...  And yet this is
+             what most pseudocode out there suggests, but in practice it
+             seems to clearly be wrong.  Also, not yet implemented is the
+             best move for each hash entry, which is supposed to make the
+             real difference.  Also iterative deepening last best move
+             was given a go some months ago but is currently disabled as
+             I couldn't get it to work...
+2010-09-30 - Fixed some basic issue with segfaulting (cause by book load
+             overflowing the internal book storage) and realized that one
+             important improvement would be avoiding draw such as making
+             repeating moves when alternate moves of similar quality are
+             available...

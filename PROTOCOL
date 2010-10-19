@@ -1,0 +1,57 @@
+gui	engine
+===	======
+
+// handshake with engine
+gnt
+
+// optional identifications
+	id name SuperEngine
+	id name Johnny B. Goode
+
+// engine is ready
+	gntok
+
+// create new game (set up board, etc)
+new
+
+// query current game state position
+board
+
+// board in order from 1...64 (a8,b8,c8 ... h3,h2,h1)
+// followed by parameters a, b, c
+// 0 - White piece
+// 1 - Black piece
+// 2 - White king
+// 3 - Black king
+// 4 - Empty square
+// some essential game state information:
+// a - Tactical square (if possible, must be captured, or -1)
+// b - Side to move (0 - white, 1 - black)
+// c - The piece on this square must move (if not -1)
+//     (Usually this means the last move did not change sides)
+	boardok 444404441444400112444444 -1 1 45
+
+// query move list
+moves
+
+// move list with move id pdn and optional description
+// pdn is in the form of abcd
+// a - from square (1...64)
+// b - "-" if a move, "x" if a capture
+//     (note: captured square is not displayed)
+// c - to square (1...64)
+// d - optional modifier:
+//     "," - if sides don't change and this piece
+//         - continues capturing
+
+	move 0 11-12 some human readable move description
+	move 1 22x24 some human readable move description
+	move 2 33x36, some human readable move description
+// end of move list
+	movesok
+
+// execute move
+do 0
+
+// necessary confirmation of move
+	done
