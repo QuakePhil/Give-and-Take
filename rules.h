@@ -9,6 +9,10 @@
 //#define RULES_DEBUG
 
 //#define COMPUTE_FORCING
+// note - if you enable COMPUTE_FORCING along with COMPUTE_DTM
+//        the code will be dump and do duplicate move_do/move_undo
+//#define COMPUTE_DTM
+
 //#define CHECK_FORCING
 
 // sometimes, halves the nps, but also reduces nodes by half or even 10 fold
@@ -210,6 +214,18 @@ if (debug_moves)
 	// if it is forced or a capture, we don't check if it is also forcing to save time
 #ifdef CHECK_FORCING
 	//if (generate_quiescent && max_levels_of_forcing < MAXFORCING)
+#endif
+
+#ifdef COMPUTE_DTM
+	// we don't do this in evaluate() in order to avoid the victory == 1 trap
+	moves[ply][move_counter[ply]].dtm = -128;
+
+	if (pawns[0] + pawns[1] + kings[0] + kings[1] < 4)
+		{
+		move_do(&moves[ply][move_counter[ply]], ply);
+		moves[ply][move_counter[ply]].dtm = encode_and_test(); // this is dumb
+		move_undo(&moves[ply][move_counter[ply]], ply);
+		}
 #endif
 #ifdef COMPUTE_FORCING
 
@@ -636,7 +652,9 @@ int move_sort(const void * a, const void * b)
 		}
 #endif
 
-	if (((MOVE *)a)->forced == ((MOVE *)b)->forced)
+//	if (((MOVE *)a)->dtm == ((MOVE *)b)->dtm)
+//	  {
+	  if (((MOVE *)a)->forced == ((MOVE *)b)->forced)
 		{
 		if (((MOVE *)a)->forcing == ((MOVE *)b)->forcing)
 			{
@@ -677,7 +695,9 @@ int move_sort(const void * a, const void * b)
 #ifdef SORT_STATISTIC
 ++sort_statistic[0];
 #endif
-	return ((MOVE *)a)->forced < ((MOVE *)b)->forced;
+	  return ((MOVE *)a)->forced < ((MOVE *)b)->forced;
+//	  }
+//	return ((MOVE *)a)->dtm > ((MOVE *)b)->dtm;
 	}
 
 // if quiesce == 1 then quiet moves are culled (so we generate

@@ -1,3 +1,5 @@
+#define POS -33022085
+
 // todo is the size right?  are we working in bits in the right places and bytes in the right places?
 
 // once that is done, get a front end to browse a .bdb file, before working on 3 piece bdbs
@@ -32,34 +34,22 @@ long piece_configuration[3][3][3][3]; // [wp][bp][wk][bk]
 /* cannot use the implied less-piece databases because */
 /* we cannot re-encode them to the same position index */
 /* =================================================== */
-#define BDB_2_SIZE (2*65*64*63)
-#define BDB_3_SIZE (2*65*64*63*62)
 
-#define BDB_SIZE (BDB_2_SIZE + BDB_3_SIZE + BDB_3_SIZE + BDB_3_SIZE + BDB_3_SIZE + BDB_3_SIZE + BDB_3_SIZE)
 #define MAX_BDB_PIECES 3
+
+//#define ABS(a) ((a)>0?(a):(-(a)))
+#define ABS(a) (a)
+#define MAX(a,b) (ABS(a)>ABS(b)?(a):(b))
 
 //#define BDB_SIZE BDB_2_SIZE
 //#define MAX_BDB_PIECES 2
-
-#define BDB_SIZE_IN_BYTES ((BDB_SIZE)/8)
 
 int piece_configuration_pieces[3][3][3][3][MAX_BDB_PIECES]; // for position_decode
 
 int number_of_positions[4] = {0, 0, BDB_2_SIZE, BDB_3_SIZE};
 
-/* ============================================== */
-/* if a bit is set here, then we know it is a win */
-/* for a position; this will hold results for all */
-/* piece configurations, using the previous array */
-/* to offset into the proper positoin here        */
-/* ============================================== */
-char bitbase[BDB_SIZE_IN_BYTES]; // e.g.: bitbase[piece_config + position_index]
-// note - this large static array confuses valgrind :(
-
-// can I has bit-twiddle to speed these up?
-#define TEST_BIT(bit) bitbase[(bit)/(8)] & (1<<((bit)%(8)))
-#define SET_BIT(bit) bitbase[(bit)/(8)] |= (1<<((bit)%(8)))
-#define RESET_BIT(bit) bitbase[(bit)/(8)] &= ~(1<<((bit)%(8)))
+int bitbase_stats[256];
+int next_dtm[256]; // stores computed function dtm = (abs(dtm) - 1) * (abs(dtm) / -dtm)
 
 inline int position_encode(int * pieces, int total_pieces)
 	{
@@ -68,7 +58,7 @@ inline int position_encode(int * pieces, int total_pieces)
 	position_index = state.side_to_move + (state.tactical_square + 1) * 2;
 
 	int piece_factor[MAX_BDB_PIECES] = {-1, -1, -1};
-	long piece_multiplier[MAX_BDB_PIECES] = {2 * 65, 2 * 65 * 64, 2 * 65 * 64 * 63};
+	long piece_multiplier[MAX_BDB_PIECES] = {2 * 65, 2 * 65 * 64, 2 * 65 * 64 * 64};
 
 	// we shouldn't have to do this here...
 	for (i = 0; i < 64; ++i) if (board[i] != 4)
@@ -77,19 +67,19 @@ inline int position_encode(int * pieces, int total_pieces)
 			{
 			if (board[i] == pieces[j] && piece_factor[j] == -1)
 				{
-				piece_factor[j] = i * piece_multiplier[j];
+				piece_factor[j] = (i) * piece_multiplier[j];
 				break;
 				}
 //			else if (piece_factor[j] == -1)
 //				{
-//				piece_factor[j] = i * piece_multiplier[j];
+//				piece_factor[j] = (i) * piece_multiplier[j];
 //				}
 			}
 		}
 
-//	printf("initial index = %d\n", position_index);
-//	for (j = 0; j < total_pieces; ++j)
-//		printf("adding piece_factor[%d] = %d\n", j, piece_factor[j]);
+//printf("initial index = %d\n", position_index);
+//for (j = 0; j < total_pieces; ++j)
+//	printf("adding piece_factor[%d] = %d\n", j, piece_factor[j]);
 
 	for (j = 0; j < total_pieces; ++j)
 		position_index += piece_factor[j];
@@ -104,10 +94,13 @@ inline int position_decode(int position, int * pieces, int total_pieces)
 	// we assume here that other state flags are pre-set by new_game()
 
 	// decode the side to move and tactical square
+//printf("position = %d\n", position);
 	state.side_to_move = position % 2;
 	position >>= 1;
+//printf("side to move = %d, position = %d\n", state.side_to_move, position);
 	state.tactical_square = (position % 65) - 1;
 	position /= 65;
+//printf("tsq = %d, position = %d\n", state.tactical_square, position);
 
 	// plenty of speed-up to be had here
 	int i, j, k, current_piece;
@@ -124,9 +117,11 @@ inline int position_decode(int position, int * pieces, int total_pieces)
 	current_piece = 0;
 	for (i = 0; i < total_pieces; ++i)
 		{
+//printf("i = %d, total_pieces = %d, k = %d, position = %d\n", i, total_pieces, k, position);
 		j = position % k;
+//printf("j = position mod k = %d\n", j);
 		position /= k;
-		--k;
+		//--k;
 
 		// avoid placing (and maintaining kings/pawns/material for)
 		// multiple pieces on one square
@@ -144,25 +139,59 @@ inline int position_decode(int position, int * pieces, int total_pieces)
 		else
 			piece_collision = 1;
 		}
+
 	return piece_collision;
 	}
 
-inline int bitbase_test(int white_pawns, int black_pawns, int white_kings, int black_kings, int position_index)
+/*
+127 - win in 0
+126 - win in 1
+125 - win in 2
+...
+0 - draw
+...
+-126 - lose in 1
+-127 - lose in 0
+-128 - no data
+*/
+
+inline char bitbase_test(int white_pawns, int black_pawns, int white_kings, int black_kings, int position_index)
 	{
-	long bit = piece_configuration[white_pawns][black_pawns][white_kings][black_kings] + position_index;
-	return TEST_BIT(bit);
+	return bitbase_dtm[piece_configuration[white_pawns][black_pawns][white_kings][black_kings] + position_index];
 	}
 
-inline void bitbase_set(int white_pawns, int black_pawns, int white_kings, int black_kings, int position_index)
+inline char encode_and_test()
 	{
-	long bit = piece_configuration[white_pawns][black_pawns][white_kings][black_kings] + position_index;
-	SET_BIT(bit);
+	static int total_pieces;
+	static int pieces[MAX_BDB_PIECES];
+	static int k;
+	if (pawns[0] + kings[0] == 0 || pawns[1] + kings[1] == 0)
+		{
+		k = evaluate();
+		if (k == -20000)
+			return -127;
+		if (k == 20000)
+			return 127;
+		return 0; // should never happen
+		// return -128;
+		}
+
+	total_pieces = 0;
+	for (k = 0; k < pawns[0]; ++k) pieces[total_pieces++] = 0;
+	for (k = 0; k < pawns[1]; ++k) pieces[total_pieces++] = 1;
+	for (k = 0; k < kings[0]; ++k) pieces[total_pieces++] = 2;
+	for (k = 0; k < kings[1]; ++k) pieces[total_pieces++] = 3;
+	return bitbase_test(pawns[0], pawns[1], kings[0], kings[1], position_encode(pieces, total_pieces));
+	}
+
+inline void bitbase_set(int white_pawns, int black_pawns, int white_kings, int black_kings, int position_index, char value)
+	{
+	bitbase_dtm[piece_configuration[white_pawns][black_pawns][white_kings][black_kings] + position_index] = value;
 	}
 
 inline void bitbase_reset(int white_pawns, int black_pawns, int white_kings, int black_kings, int position_index)
 	{
-	long bit = piece_configuration[white_pawns][black_pawns][white_kings][black_kings] + position_index;
-	RESET_BIT(bit);
+	bitbase_dtm[piece_configuration[white_pawns][black_pawns][white_kings][black_kings] + position_index] = -128;
 	}
 
 /* ============================================ */
@@ -175,7 +204,31 @@ inline void bitbase_reset(int white_pawns, int black_pawns, int white_kings, int
 /* change for an iteration then for this set of */
 /* pieces we have built our bitbase             */
 /* ============================================ */
-void build_bitbase(int white_pawns, int black_pawns, int white_kings, int black_kings)
+int build_bitbase2(int white_pawns, int black_pawns, int white_kings, int black_kings)
+	{
+	int nodata = 0;
+	int last_nodata = 0;
+	int i = 0;
+	do
+		{
+		nodata = build_bitbase(white_pawns, black_pawns, white_kings, black_kings);
+		if (nodata == 0)
+			{
+			printf("Everything has been calculated.\n");
+			return 0;
+			}
+		if (nodata > 0 && nodata == last_nodata)
+			{
+			printf("Exiting infinite loop.\n");
+			return 1;
+			}
+		last_nodata = nodata;
+		}
+	while (nodata > 0);
+	return 0;
+	}
+
+int build_bitbase(int white_pawns, int black_pawns, int white_kings, int black_kings)
 	{
 	char bitbase_file[10];
 
@@ -191,7 +244,10 @@ void build_bitbase(int white_pawns, int black_pawns, int white_kings, int black_
 	/* have {2,2,0,0,1,1,1,1,1,3}     */
 	/* ============================== */
 	int pieces[MAX_BDB_PIECES];
-	int i, j;
+	int i, j, k;
+
+	int total_pieces2;
+	int pieces2[MAX_BDB_PIECES]; // to be used for secondary lookups
 
 	// the order of pieces[] is important...  i think
 	for (i = 0; i < white_pawns; ++i)
@@ -220,130 +276,168 @@ void build_bitbase(int white_pawns, int black_pawns, int white_kings, int black_
 	bitbase_file[total_pieces+3] = 'b';
 	bitbase_file[total_pieces+4] = 0;
 
+	for (i = 0; i < 256; ++i) bitbase_stats[i] = 0;
+
 	printf("Building bitbase: %s\n", bitbase_file);
 
 	new_game();
 
 	double t1;
 
-	// reset the bitbase to zero, and also make sure position decode/encode works
 	t1 = timer();
-	int positions_with_overlapped_pieces = 0;
-	int positions_examined = 0;
+
+	// check moves leading to wins and mark those too
+	char current_best_case_scenario = -128;
+	char all_moves_known = 0;
+	int original_side_to_move;
+
 	for (position = 0; position < number_of_positions[total_pieces]; ++position)
 		{
-		i = position_decode(position, pieces, total_pieces);
-
-		// skip positions with overlapping pieces, even though these
-		// could be legal, they only confuse the encode/decode
-		if (i || kings[0] + kings[1] + pawns[0] + pawns[1] != total_pieces)
-			{
-			++positions_with_overlapped_pieces;
+		if (bitbase_test(white_pawns, black_pawns, white_kings, black_kings, position) != -128)
 			continue;
-			}
-		++positions_examined;
 
-		i = position_encode(pieces, total_pieces);
+		if (position % 5000000 == 0 && position != 0)
+			printf("Position %d out of %d (%.2f%%, %.2lf elapsed)\n", position, number_of_positions[total_pieces]
+			,1.0*position/number_of_positions[total_pieces]*100.0, timer()-t1);
 
-// this check is no good because our index has duplicates
-// e.g. the same index will give multiple position: (B1,W1,W2), (B1,W2,W1)
-/*		if (position != i)
+		i = position_decode(position, pieces, total_pieces);
+		original_side_to_move = state.side_to_move;
+
+//		if (i || kings[0] + kings[1] + pawns[0] + pawns[1] != total_pieces)
+//			continue;
+
+		generate_moves(0, 0);
+if (position == POS) {print_board(0);}
+
+		current_best_case_scenario = -128;
+		all_moves_known = 1;
+		if (move_counter[0] == 0 || pawns[0] + kings[0] == 0 || pawns[1] + kings[1] == 0)
 			{
-			printf("Mismatch: position index: %d, re-encoded: %d\n", position, i);
-			print_board(0);
-			getc(stdin);
+			// if no moves, we still need to store something besides draw or -128
+			// for example when the board is: W W - - - - - -
+			j = evaluate();
+			if (j == -20000)
+				current_best_case_scenario = -127; // note - this is reversed, because it would
+			else if (j == 20000) // only ever be seen from one move up
+				current_best_case_scenario = 127;
+			else
+				current_best_case_scenario = 0;
+			}
+		else for (i = 0; i < move_counter[0]; ++i)
+			{
+if (position == POS) {print_move(&moves[0][i], 0);printf("\n");}
+
+			move_do(&moves[0][i], 0);
+			j = encode_and_test();
+
+			if (j != -128)
+				{
+				if (original_side_to_move == state.side_to_move)
+					current_best_case_scenario = MAX(-next_dtm[j+128], current_best_case_scenario);
+				else
+					current_best_case_scenario = MAX(next_dtm[j+128], current_best_case_scenario);
+				}
+
+			if (j == -128)
+				{
+				if (pawns[0] == 0 && pawns[1] == 0
+				&& kings[0] == 1 && kings[1] == 1) // this should only happen in K-K
+					{
+					j = evaluate();
+					if (j == -20000) // -20000 is when <side> won and just moved
+						current_best_case_scenario = MAX(current_best_case_scenario, 126);
+					// draws calculated in K-K only, the rest have to remain -128 to
+					// be recalculated again
+					else // if (pawns[0] == 0 && pawns[1] == 0 && kings[0] == 1 && kings[1] == 1)
+						current_best_case_scenario = MAX(current_best_case_scenario, 0); // draw?
+
+	if (position == POS) {printf("eval() = %d\n", j);}
+					}
+				else
+					{
+					all_moves_known = 0;
+					}
+				}
+			move_undo(&moves[0][i], 0);
+if (position == POS) {printf("current best case = %d\n", current_best_case_scenario);getc(stdin);}
+			}
+
+		if (all_moves_known == 0)
+			{
+			if (current_best_case_scenario > 0)
+				{
+				; // preserve known wins for side to move (losses don't work)
+				// this way, subsequent passes will calculate longer
+				// winning variations, until there is no more to calculate
+				}
+			else
+				current_best_case_scenario = -128;
+			}
+
+/*
+		// heuristic..  does this belong her?
+		// corner set up is a lose in 4 for the 1 king side to move
+		if (pawns[0] == 0 && pawns[1] == 0 && kings[0] == 2 && kings[1] == 1 && state.side_to_move == 1)
+			{
+			if (board[0] == 2 && board[54] == 2 && board[63] == 3) current_best_case_scenario = -123;
+			if (board[7] == 2 && board[49] == 2 && board[56] == 3) current_best_case_scenario = -123;
+			if (board[63] == 2 && board[9] == 2 && board[0] == 3) current_best_case_scenario = -123;
+			if (board[56] == 2 && board[14] == 2 && board[7] == 3) current_best_case_scenario = -123;
+			}
+		if (pawns[0] == 0 && pawns[1] == 0 && kings[0] == 1 && kings[1] == 2 && state.side_to_move == 0)
+			{
+			if (board[0] == 3 && board[54] == 3 && board[63] == 2) current_best_case_scenario = -123;
+			if (board[7] == 3 && board[49] == 3 && board[56] == 2) current_best_case_scenario = -123;
+			if (board[63] == 3 && board[9] == 3 && board[0] == 2) current_best_case_scenario = -123;
+			if (board[56] == 3 && board[14] == 3 && board[7] == 2) current_best_case_scenario = -123;
 			}
 */
 
-		/* =================================================================== */
-		/* we could evaluate here, but only illegalish positions would qualify */
-		/* (e.g. those with overlapping pieces) and we skip those as per above */
-		/* =================================================================== */
-		bitbase_reset(white_pawns, black_pawns, white_kings, black_kings, position);
+		bitbase_set(white_pawns, black_pawns, white_kings, black_kings, position, current_best_case_scenario);
+		++bitbase_stats[127-current_best_case_scenario];
 		}
+	int total_positions_calculated = 0;
+	for (i = 0; i < 256; ++i)
+		total_positions_calculated += bitbase_stats[i];
 
-	printf("Bitbase reset %d, skipped %d, total %d in %.2lf seconds\n"
-		, positions_examined
-		, positions_with_overlapped_pieces
-		, number_of_positions[total_pieces]
-		, timer()-t1);
-
-	// check moves leading to wins and mark those too
-	int positions_already_marked_as_won;
-	int positions_marked_as_won;
-	int all_moves_are_won_for_black;
-
-	for (;;)
-	  {
-	  positions_already_marked_as_won =
-	  positions_marked_as_won = 0;
-
-	  t1 = timer();
-
-	  for (position = 0; position < number_of_positions[total_pieces]; ++position)
+	for (i = 0; i < 256; ++i) if (bitbase_stats[i] > 0)
 		{
-		i = bitbase_test(white_pawns, black_pawns, white_kings, black_kings, position);
-		if (i)
+//printf("bitbase_stats[%d]=%d\n", i, bitbase_stats[i]);
+		printf("(%d) ", i);
+		if (i == 255)
+			printf("No data:   \t%d (%.2f%%)\n"
+				,bitbase_stats[i]
+				,(float)bitbase_stats[i]/total_positions_calculated*100.0);
+		else
 			{
-			++positions_already_marked_as_won;
-			continue; // already marked as won for black
-			}
-
-		i = position_decode(position, pieces, total_pieces);
-		if (i || kings[0] + kings[1] + pawns[0] + pawns[1] != total_pieces)
-			continue;
-
-// todo -- better bitbase get/set wrappers
-// how to manage constructing/deconstructing position_index easily and quickly
-		generate_moves(0, 0);
-/*
-if (move_counter[0] > 0)
-{
-
-print_board(0);print_moves(0);
-getc(stdin);
-}*/
-		all_moves_are_won_for_black = 1;
-		for (i = 0; i < move_counter[0]; ++i)
-			{
-			move_do(&moves[0][i], 0);
-			if (kings[0] + kings[1] + pawns[0] + pawns[1] == total_pieces)
-				{
-				j = bitbase_test(white_pawns, black_pawns, white_kings, black_kings, position_encode(pieces, total_pieces));
-				if (!j)
-					all_moves_are_won_for_black = 0;
-				}
+			if (i < 127)
+				printf("Win in %d:\t%d (%.2f%%)\n"
+					,i
+					,bitbase_stats[i]
+					,(float)bitbase_stats[i]/total_positions_calculated*100.0);
+			else if (i > 127)
+				printf("Lose in %d:\t%d (%.2f%%)\n"
+					,254 - i
+					,bitbase_stats[i]
+					,(float)bitbase_stats[i]/total_positions_calculated*100.0);
 			else
-				{
-				j = evaluate();
-				if (j != -20000)
-					all_moves_are_won_for_black = 0;
-				}
-			move_undo(&moves[0][i], 0);
-			if (all_moves_are_won_for_black == 0)
-				break;
-			}
-
-		if (all_moves_are_won_for_black)
-			{
-			++positions_marked_as_won;
-			bitbase_set(white_pawns, black_pawns, white_kings, black_kings, position);
+				printf("Draw:      \t%d (%.2f%%)\n"
+					,bitbase_stats[i]
+					,(float)bitbase_stats[i]/total_positions_calculated*100.0);
 			}
 		}
-
-	  printf("Pass complete in %.2lf seconds\n", timer()-t1);
-	  printf("  Positions already marked as won: %d of %d\n"
-		, positions_already_marked_as_won, number_of_positions[total_pieces]);
-	  printf("  Positions marked as won: %d\n", positions_marked_as_won);
-	  if (positions_marked_as_won == 0)
-		break;
-	  }
+	printf("Pass complete in %.2lf seconds, valid positions considered: %d out of %d\n", 
+		timer()-t1, total_positions_calculated, number_of_positions[total_pieces]);
+	if (bitbase_stats[255] > 0)
+		{
+		printf("Unknown entries remain, more passes needed\n");
+		return bitbase_stats[255];
+		}
+	return 0;
 	}
 
 int load_bitbases()
 	{
-	char bitbase_file[] = "bitbases.dat";
-
 	/* ================================= */
 	/* if you think about how the pieces */
 	/* can be configured, you can see it */
@@ -359,8 +453,10 @@ int load_bitbases()
 	/* about 2 gigs of dumb space, so we */
 	/* will worry about those later :p   */
 	/* ================================= */
-	int i;
+	int i, j, k;
 	piece_configuration[0][0][1][1] = i = 0; // white K vs K
+	piece_configuration[0][0][2][0] = i = i + BDB_2_SIZE; // KK vs
+	piece_configuration[0][0][0][2] = i = i + BDB_2_SIZE; // vs KK
 	piece_configuration[0][0][1][2] = i = i + BDB_2_SIZE; // K vs KK
 	piece_configuration[0][1][1][1] = i = i + BDB_3_SIZE; // K vs Km
 	piece_configuration[0][2][1][0] = i = i + BDB_3_SIZE; // K vs mm
@@ -368,52 +464,123 @@ int load_bitbases()
 	piece_configuration[1][0][1][1] = i = i + BDB_3_SIZE; // Km vs K
 	piece_configuration[2][0][0][1] = i = i + BDB_3_SIZE; // mm vs K
 
-	FILE * save;
+        if (lzo_init() != LZO_E_OK)
+                {
+                printf("lzo failed to init, no bitbase support\n");
+		return -1;
+                }
 
-	save = fopen(bitbase_file, "r");
-	if (save)
+	double t1 = timer();
+	if (decompress_bitbase())
 		{
-		fread(bitbase, sizeof(char), BDB_SIZE_IN_BYTES, save);
+		printf("Loaded bitbases from %s in %.2lf seconds\n", bitbase_dtm_file, timer()-t1);
+		return 0;
+		}
+/*	save = fopen(bitbase_dtm_file, "r");
+	if (save) // && 1 == 2)
+		{
+		double t1 = timer();
+		save = fopen(bitbase_dtm_file, "r");
+		fread(bitbase_dtm, sizeof(char), BDB_SIZE, save);
 		fclose(save);
-		printf("Loaded bitbases from file\n");
-		return;
+		printf("Loaded bitbases from %s in %.2lf seconds\n", bitbase_dtm_file, timer()-t1);
+		return 0;
+		}
+*/
+
+	// stores computed function dtm = (abs(dtm) - 1) * (abs(dtm) / -dtm)
+//	printf("i\ti-128\tnext dtm\n");
+	for (i = 0; i < 256; ++i)
+		{
+		j = i-128;
+		k = j>0?j:-j; // abs(j)
+		if (k == 0)
+			next_dtm[i] = 0;
+		else
+			next_dtm[i] = (k - 1) * (k / -j);
+//			printf("%d\t%d\t%d\n", i, i-128, next_dtm[i]);
 		}
 
+	printf("Resetting bitbase...\n");
+	for (i = 0; i < BDB_SIZE; ++i) bitbase_dtm[i] = -128;
 
 	// build in proper order
-	build_bitbase(0, 0, 1, 1); // K-K
-	build_bitbase(0, 0, 2, 1); // KK-K
-	build_bitbase(0, 0, 1, 2); // K-KK
+	build_bitbase2(0, 0, 1, 1); // K-K - only one must be pass required here
+	build_bitbase2(0, 0, 2, 0); // KK- and -KK are required also, e.g. so you can know the solution to:
+	build_bitbase2(0, 0, 0, 2); // W - B W - - - - ; white to move
 
-	build_bitbase(0, 1, 1, 1); // K-Km
-	build_bitbase(0, 2, 1, 0); // K-mm
-	build_bitbase(1, 0, 1, 1); // Km-K
-	build_bitbase(2, 0, 0, 1); // mm-K
+	int loops_detected = 0;
+	int last_loops_detected = 0;
+	do
+		{
+		loops_detected = 0;
+		loops_detected += build_bitbase2(0, 0, 2, 1); // KK-K
+		loops_detected += build_bitbase2(0, 0, 1, 2); // K-KK
 
-	printf("Writing %s\n", bitbase_file);
-	save = fopen(bitbase_file, "w");
+		loops_detected += build_bitbase2(0, 1, 1, 1); // K-Km
+		loops_detected += build_bitbase2(0, 2, 1, 0); // K-mm
+		loops_detected += build_bitbase2(1, 0, 1, 1); // Km-K
+		loops_detected += build_bitbase2(2, 0, 0, 1); // mm-K
+
+		if (loops_detected > 0 && loops_detected == last_loops_detected)
+			{
+			printf("Exiting infinite loop of exits of infinite loops :)\n");
+			break;
+			}
+		last_loops_detected = loops_detected;
+		}
+	while (loops_detected > 0);
+
+	compress_bitbase();
+
+/*
+	printf("Writing %s\n", bitbase_dtm_file);
+	save = fopen(bitbase_dtm_file, "w");
 	if (save)
 		{
-		fwrite(bitbase, sizeof(char), BDB_SIZE_IN_BYTES, save);
+		fwrite(bitbase_dtm, sizeof(char), BDB_SIZE, save);
 		fclose(save);
 		}
 	else
-		printf("Could not write to file\n");
+		printf("Could not write to file\n"); */
 	printf("Done\n");
+	return 1;
 	}
 
 void bitbase_report()
 	{
 	int i;
-
 	printf("Size required for 2 pieces: %d bits, %d bytes, %d kb\n", BDB_2_SIZE, BDB_2_SIZE/8, BDB_2_SIZE/8/1024);
 	printf("Size required for 3 pieces: %d bits, %d bytes, %d kb\n", BDB_3_SIZE, BDB_3_SIZE/8, BDB_3_SIZE/8/1024);
 	printf("Size required for 2+3: %d bits, %d bytes, %d kb\n", BDB_SIZE, BDB_SIZE/8, BDB_SIZE/8/1024);
-	i = piece_configuration[2][0][0][1];
-	printf("Offset for last piece configuration: %d bits, %d bytes, %d kb\n", i, i/8, i/8/1024);
-	printf("(%d + %d should equal %d)\n", i/8/1024, BDB_3_SIZE/8/1024, BDB_SIZE/8/1024);
-	// for (i = 0; i < 16; ++i) printf("TEST_BIT(%d) = %d\n", i, TEST_BIT(i));
-	// for (i = 0; i < 16; ++i) if (i%2) {printf("SET_BIT(%d)\n", i); SET_BIT(i);}
-	// for (i = 0; i < 16; ++i) printf("TEST_BIT(%d) = %d\n", i, TEST_BIT(i));
+	int first = 0;
+	for (i = 0; i < 256; ++i) bitbase_stats[i] = 0;
+	for (i = 0; i < BDB_SIZE; ++i)
+		{
+		++bitbase_stats[127-bitbase_dtm[i]];
+		if (first == 0 && bitbase_dtm[i] == - 128 && i >= piece_configuration[0][0][2][1])
+			first = i;
+		}
+	for (i = 0; i < 256; ++i) if (bitbase_stats[i] > 0)
+		{
+		printf("(%d) ", i);
 
+		if (i == 255)
+			printf("No data:   \t%d (first - %d)\n"
+				,bitbase_stats[i], first);
+		else
+			{
+			if (i < 127)
+				printf("Win in %d:\t%d\n"
+					,i
+					,bitbase_stats[i]);
+			else if (i > 127)
+				printf("Lose in %d:\t%d\n"
+					,254 - i
+					,bitbase_stats[i]);
+			else
+				printf("Draw:      \t%d\n"
+					,bitbase_stats[i]);
+			}
+		}
 	}

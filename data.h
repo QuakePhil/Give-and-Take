@@ -186,6 +186,16 @@ typedef struct
 	// holds the evaluation of the position after this move
 	// for move ordering
 	int evaluation;
+
+	// holds the bitbase dtm value, -128 if no data
+	// 127 - win in 0
+	// 126 - win in 1
+	// ...
+	// 0 - draw
+	// -1 - lose in 126
+	// -126 - lose in 1
+	// -127 - lose in 0
+//	char dtm;
 	}
 MOVE;
 
@@ -231,6 +241,16 @@ int initial_board[64] =
 	0, 0, 0, 0, 0, 0, 0, 0,
 	4, 4, 4, 4, 4, 4, 4, 4
 
+	// endgame sample
+/*	4, 4, 4, 4, 4, 4, 4, 4,
+	4, 0, 4, 4, 4, 4, 3, 4,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	4, 4, 4, 4, 4, 4, 4, 4,
+	0, 4, 4, 4, 4, 4, 4, 4
+*/
 
 	// white to win in 6 moves
 /*	4, 4, 4, 4, 4, 4, 4, 4,
@@ -290,9 +310,9 @@ int endgame_positional_value[64] =
 #else
 int positional_value[64] =
 	{
-	KV,KV,KV,KV,KV,KV,KV,KV,
-	KV/1.5,KV/2,KV/2,KV/2,KV/2,KV/2,KV/2,KV/1.5,
-	KV/2.5,KV/3,KV/3,KV/3,KV/3,KV/3,KV/3,KV/2.5,
+	KV    ,KV    ,KV    ,KV    ,KV    ,KV    ,KV    ,    KV,
+	KV/1.5,KV/2  ,KV/2  ,KV/2  ,KV/2  ,KV/2  ,KV/2  ,KV/1.5,
+	KV/2.5,KV/3  ,KV/3  ,KV/3  ,KV/3  ,KV/3  ,KV/3  ,KV/2.5,
 	50,20,20,20,20,20,20,50,
 	10, 0, 0, 0, 0, 0, 0,10,
 	5, 0, 0, 0, 0, 0, 0, 5,

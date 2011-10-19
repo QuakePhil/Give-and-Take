@@ -14,6 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+#include "prototypes.h"
+
 // #include "qsort.h"
 #include "data.h"
 #include "hash.h"
@@ -21,6 +24,7 @@
 #include "precompute.h"
 #include "rules.h"
 #include "perft.h"
+#include "lzo_bitbase.h"
 #include "bitbases.h"
 #include "opening.h"
 #include "evaluate.h"
@@ -45,7 +49,13 @@ int main(int argc, char *argv[])
 	hash_init();
 #endif
 	// load_endgames();
-//	load_bitbases();
+	int i, j, k;
+
+	i = load_bitbases();
+	if (i == 1)
+		return 0; // initial bitbase calculation is not interactive
+
+	//bitbase_report();
 	if (argc == 2 && !strcmp(argv[1], "nobook"))
 		{
 		printf("Skipping opening book\n");
@@ -67,8 +77,6 @@ int main(int argc, char *argv[])
 	new_game();
 
 	int ply;
-
-	int i, j, k;
 
 	FILE * input;
 	FILE * output;
@@ -95,28 +103,189 @@ int main(int argc, char *argv[])
 		return 0;
 		}
 
-	if (argc == 7 && !strcmp(argv[1], "position"))
+	// dtmseek a, b, c, d, value
+	if (argc == 7 && !strcmp(argv[1], "dtmseek"))
 		{
-		i = bitbase_test(
-			atoi(argv[2])
-			,atoi(argv[3])
-			,atoi(argv[4])
-			,atoi(argv[5])
-			,atoi(argv[6])
-			);
-		printf("%s\n", i ? "is a win for black" : "not a win for black");
-
-		int pieces[MAX_BDB_PIECES];
 		int total_pieces = 0;
-
+		int pieces[MAX_BDB_PIECES];
+//		total_pieces = atoi(argv[2]) + atoi(argv[3]) + atoi(argv[4]) + atoi(argv[5]);
+		total_pieces = 0;
 		for (i = 0; i < atoi(argv[2]); ++i) pieces[total_pieces++] = 0;
 		for (i = 0; i < atoi(argv[3]); ++i) pieces[total_pieces++] = 1;
 		for (i = 0; i < atoi(argv[4]); ++i) pieces[total_pieces++] = 2;
 		for (i = 0; i < atoi(argv[5]); ++i) pieces[total_pieces++] = 3;
 
-		position_decode(atoi(argv[6]), pieces, total_pieces);
+		printf("Seeking %d positions...\n", number_of_positions[total_pieces]);
+
+		if (total_pieces < 4 && total_pieces > 1) for (j = 0; j < number_of_positions[total_pieces]; ++j)
+			{
+			i = bitbase_test(
+				atoi(argv[2])
+				,atoi(argv[3])
+				,atoi(argv[4])
+				,atoi(argv[5])
+				,j);
+			if (i == atoi(argv[6]))
+				{
+				printf("position (#%d): %d ", j, i);
+				if (i == 0)
+					printf("drawn\n");
+				else if (i == -128)
+					printf("unknown\n");
+				else if (i > 0)
+					printf("win in %d\n",127-i);
+				else
+					printf("lose in %d\n",127+i);
+
+
+				position_decode(j, pieces, total_pieces);
+
+				print_board(0);
+				generate_moves(0, 0);
+				for (i = 0; i < move_counter[0]; ++i)
+					{
+					fprintf(output, "move: %d ",i);
+					print_move(&moves[0][i], 0);
+
+					move_do(&moves[0][i], 0);
+
+					k = pawns[0] + pawns[1] + kings[0] + kings[1];
+
+					if (k < 4 && k > 1)
+						{
+						j = encode_and_test();
+						printf(" %d", -j);
+
+						if (j == 0)
+							printf(" drawn");
+						else if (j == -128)
+							printf(" unknown");
+						else if (j > 0)
+							printf(" win in %d",127-j);
+						else
+							printf(" lose in %d",127+j);
+
+						//else if (j > 0)
+						//	printf(" lose in %d",126-j); // these are swapped to maintain pov
+						//else
+						//	printf(" win in %d",126+j);
+						}
+					else
+						printf(" -999 (%d,%d,%d,%d)", pawns[0],pawns[1],kings[0],kings[1]);
+
+					move_undo(&moves[0][i], 0);
+
+					fprintf(output, "\n");
+					}
+
+				getc(stdin);
+				}
+			}
+
+		printf("Done.\n");
+		return 0;
+		}
+
+	if (argc == 8 && !strcmp(argv[1], "position"))
+		{
+		int total_pieces = 0;
+		total_pieces = atoi(argv[2]) + atoi(argv[3]) + atoi(argv[4]) + atoi(argv[5]);
+
+		if (total_pieces < 4 && total_pieces > 1)
+			{
+			i = bitbase_test(
+				atoi(argv[2])
+				,atoi(argv[3])
+				,atoi(argv[4])
+				,atoi(argv[5])
+				,atoi(argv[6])
+				);
+			printf("position: %d ", i);
+			if (i == 0)
+				printf("drawn\n");
+			else if (i == -128)
+				printf("unknown\n");
+			else if (i > 0)
+				printf("win in %d\n",127-i);
+			else
+				printf("lose in %d\n",127+i);
+			}
+
+
+		int pieces[MAX_BDB_PIECES];
+
+		if (total_pieces < 4 && total_pieces > 1)
+			{
+			total_pieces = 0;
+
+			for (i = 0; i < atoi(argv[2]); ++i) pieces[total_pieces++] = 0;
+			for (i = 0; i < atoi(argv[3]); ++i) pieces[total_pieces++] = 1;
+			for (i = 0; i < atoi(argv[4]); ++i) pieces[total_pieces++] = 2;
+			for (i = 0; i < atoi(argv[5]); ++i) pieces[total_pieces++] = 3;
+
+			position_decode(atoi(argv[6]), pieces, total_pieces);
+			}
+		else
+			{
+			i = atoi(argv[6]);
+			state.side_to_move = i % 2;
+			i >>= 1;
+			state.tactical_square = (i % 65) -1;
+			pawns[0] = pawns[1] = kings[0] = kings[1] = material[0] = material[1] = 0;
+			for (i = 0; i < 64; ++i)
+				{
+				board[i] = argv[7][i] - '0';
+				if (board[i] < 4)
+					{
+					if (board[i] < 2)
+						++pawns[board[i]%2];
+					else
+						++kings[board[i]%2];
+					material[board[i]%2] += piece_values[board[i]];
+					}
+				}
+			printf("\n");
+			}
 
 		print_board(0);
+
+		generate_moves(0, 0);
+		for (i = 0; i < move_counter[0]; ++i)
+			{
+			fprintf(output, "move: %d ",i);
+			print_move(&moves[0][i], 0);
+
+			move_do(&moves[0][i], 0);
+
+			k = pawns[0] + pawns[1] + kings[0] + kings[1];
+
+			if (k < 4 && k > 1)
+				{
+				j = encode_and_test();
+				printf(" %d", -j);
+
+				if (j == 0)
+					printf(" draws");
+				else if (j == -128)
+					printf(" unknown");
+				else if (j > 0)
+					printf(" wins in %d",127-j);
+				else
+					printf(" loses in %d",127+j);
+
+				//else if (j > 0)
+				//	printf(" lose in %d",126-j); // these are swapped to maintain pov
+				//else
+				//	printf(" win in %d",126+j);
+				}
+			else
+				printf(" -999 (%d,%d,%d,%d)", pawns[0],pawns[1],kings[0],kings[1]);
+
+			move_undo(&moves[0][i], 0);
+
+			fprintf(output, "\n");
+			}
+//		printf("final index = %d\n",position_encode(pieces, total_pieces));
 
 		return 0;
 		}

@@ -26,6 +26,8 @@ don't forget to remove the restrictions:
 
 //#define TRACE_PV
 
+#define REPETITION_DETECTION
+
 int search(int ply, int depth, int alpha, int beta, int quiesce, double * ttl)
 	{
 //printf("search(%d,a=%d,b=%d,q=%d)\n",ply, alpha, beta, quiesce);
@@ -35,7 +37,7 @@ int search(int ply, int depth, int alpha, int beta, int quiesce, double * ttl)
 
 	int increase_depth = 0;
 
-	i = decision();
+	i = decision(&ply);
 	if (i != 60000)
 		return i;
 
@@ -99,6 +101,7 @@ generate_move_strategy = 0;
 
 	for (i = 0; i < move_counter[ply]; ++i)
 		{
+
 #ifdef NEW_MOVE_STRATEGY
 if (i >= move_counter_sorted[0][ply])
 	copy_move(&moves[ply][i], &moves_sorted[1][ply][i - move_counter_sorted[0][ply]]);
@@ -132,6 +135,57 @@ else
 			a = search(ply + 1, depth + increase_depth, alpha, beta, quiesce, ttl);
 
 		move_undo(&moves[ply][i], ply);
+
+#ifdef REPETITION_DETECTION
+		if (ply == 0 && move_list_counter >= 8 && moves[ply][i].captured == -1)
+			{
+			char this_move[6];
+			sprintf(this_move, "%s-%s", notation[moves[ply][i].from], notation[moves[ply][i].to]);
+			if (move_list[move_list_counter-1][2] == '-'
+				&& move_list[move_list_counter-2][2] == '-'
+				&& move_list[move_list_counter-3][2] == '-'
+				&& move_list[move_list_counter-4][2] == '-'
+
+				&& move_list[move_list_counter-4][0] == this_move[0]
+				&& move_list[move_list_counter-4][1] == this_move[1]
+				&& move_list[move_list_counter-4][3] == this_move[3]
+				&& move_list[move_list_counter-4][4] == this_move[4]
+
+				&& move_list[move_list_counter-2][3] == this_move[0]
+				&& move_list[move_list_counter-2][4] == this_move[1]
+				&& move_list[move_list_counter-2][0] == this_move[3]
+				&& move_list[move_list_counter-2][1] == this_move[4]
+
+				&& move_list[move_list_counter-3][3] == move_list[move_list_counter-1][0]
+				&& move_list[move_list_counter-3][4] == move_list[move_list_counter-1][1]
+				&& move_list[move_list_counter-3][0] == move_list[move_list_counter-1][3]
+				&& move_list[move_list_counter-3][1] == move_list[move_list_counter-1][4]
+			)
+				a = 0; // reset to draw!
+			else if (move_list[move_list_counter-5][2] == '-'
+				&& move_list[move_list_counter-6][2] == '-'
+				&& move_list[move_list_counter-7][2] == '-'
+				&& move_list[move_list_counter-8][2] == '-'
+
+				&& move_list[move_list_counter-8][0] == this_move[0]
+				&& move_list[move_list_counter-8][1] == this_move[1]
+				&& move_list[move_list_counter-8][3] == this_move[3]
+				&& move_list[move_list_counter-8][4] == this_move[4]
+
+				&& move_list[move_list_counter-6][3] == this_move[0]
+				&& move_list[move_list_counter-6][4] == this_move[1]
+				&& move_list[move_list_counter-6][0] == this_move[3]
+				&& move_list[move_list_counter-6][1] == this_move[4]
+
+				&& move_list[move_list_counter-7][3] == move_list[move_list_counter-5][0]
+				&& move_list[move_list_counter-7][4] == move_list[move_list_counter-5][1]
+				&& move_list[move_list_counter-7][0] == move_list[move_list_counter-5][3]
+				&& move_list[move_list_counter-7][1] == move_list[move_list_counter-5][4]
+			)
+				a = 0; // reset to draw!
+			}
+#endif
+
 
 		// beta cutoff
 		if (a >= beta)
@@ -239,7 +293,7 @@ MOVE think(int ply, int depth, double * ttl, int * victory)
 
 	a = search(ply, depth, -60000, 60000, 0, ttl);
 
-	if (a == 20000 || a == -20000)
+	if (a >= 20000 || a <= -20000)
 		*victory = 1;
 
 	t2 = timer();
@@ -249,13 +303,18 @@ MOVE think(int ply, int depth, double * ttl, int * victory)
 
 	if (*ttl != -1)
 		{
-		printf("%3d/%3d %11.2lf %12d %7.0lf %6.2f "
+		printf("%3d/%3d %11.2lf %12d %7.0lf "
 			,depth
 			,quiescence_depth - depth
 			,t2-t1
 			,node_counter
-			,(t2-t1)>1?((double)node_counter)/(t2-t1):node_counter
-			,a/100.0);
+			,(t2-t1)>1?((double)node_counter)/(t2-t1):node_counter);
+		if (a > 20000)
+			printf(" W%-4d ", a-20127);
+		else if (a < -20000)
+			printf(" L%-4d ", a+20127);
+		else
+			printf("%6.2f ", a/100.0);
 
 		for (i = 0; i < quiescence_depth; ++i)
 			{

@@ -2,6 +2,8 @@
 
 #define ENDGAME_EVALUATION
 
+#define USE_EGTB
+
 //#define EVALUATE_EDGE_BLOCKS
 // haywire opening/middle game... dunno about endgame heh
 
@@ -73,7 +75,7 @@ int evaluate_lone_king()
 /* just a simplified version of evaluate */
 /* to determine win/lose/draw conditions */
 /* ===================================== */
-inline int decision()
+inline int decision(int * ply)
 	{
 //	if (material[0] > 0 && material[1] == 0)
 //		return (state.side_to_move == 0 ? 20000 : -20000);
@@ -90,6 +92,19 @@ inline int decision()
 //		&& kings[1] == 1)
 //		return 0;
 
+	if (kings[0] + kings[1] + pawns[0] + pawns[1] < 4 && *ply != 0)
+		{
+		char dtm = encode_and_test();
+		if (dtm == -128)
+			return 60000;
+		if (dtm == 0)
+			return 0;
+		if (dtm > 0)
+			return 20000 + dtm;
+		if (dtm < 0)
+			return -20000 + dtm;
+		}
+
 	return 60000;
 	}
 
@@ -101,6 +116,25 @@ inline int decision()
 int evaluate()
 	{
 	int value = 0;
+
+#ifdef USE_EGTB
+/*	char dtm;
+	if (kings[0] + kings[1] + pawns[0] + pawns[1] < 4)
+		{
+		dtm = encode_and_test();
+		if (dtm == -128)
+			{
+			; // no data - continue with the rest of evaluation
+			}
+		else if (dtm == 0)
+			return 0;
+		else if (dtm > 0)
+			return 30000-dtm;
+		else
+			return -30000-dtm;
+		}
+*/
+#endif
 
 #ifndef DUMBED
 	if (kings[0] == 1 && kings [1] == 1 && 

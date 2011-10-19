@@ -16,7 +16,7 @@ long performance_test(int ply, double * ttl)
                 if (*ttl != -1)
                         printf("performance_test: timeout\n");
                 *ttl = -1;
-                return;
+                return 0;
                 }
 
 	generate_moves(ply, -1);

@@ -2,12 +2,14 @@ run compile.sh
 
 it will create "gntdev"
 
-now you can run that and play it in text mode
+decompress the bitbases.dtm.bz2 (it will spend a long time generating them if you don't)
 
-to avoid re-generating all those bitbases (which aren't really used yet anyway) bunzip the bitbases.dat.bz2
+now you can run that and play it in text mode
 
 to use the web interface, make sure this directory has write privileges for the webserver user
 * for standard strength, copy "gntdev" to "gnt"
 * for easy strength, you will have to compile a "gntez" variant, check the code if you really want to do this...
 * that's dumb, I know :) easy strength was a hack and will be done more properly in the future (maybe.)
 
+note: this is still a work in progress, so theres garbage code and debug code, hopefully most of it
+is commented out and/or inactivated

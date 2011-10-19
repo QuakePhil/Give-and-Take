@@ -26,17 +26,27 @@ double timer()
 #endif
 
 #ifndef WINDOWS
+
+#ifdef __cplusplus
+#include <ctime>
+#include <ctime>
+#else
 #include <sys/time.h>
 #include <sys/time.h>
+#endif
 
 /* ========================================== */
 /* should be a different function for windows */
 /* ========================================== */
 double timer()
 	{
+#ifdef __cplusplus
+	return (double)time(NULL);
+#else
 	static struct timeval t;
 	gettimeofday(&t, NULL);
 	return t.tv_sec+(t.tv_usec/1000000.0);
+#endif
 	}
 #endif
 
@@ -76,6 +86,7 @@ void print_move(MOVE * move, int detail)
 			printf(", next move is forced");
 
 		printf(", value %d)", move->evaluation);
+		//printf(", dtm %d)", move->dtm);
 		}
 	}
 
@@ -173,14 +184,16 @@ void new_game()
 	generate_quiescent = 0;
 
 	material[0] = material[1] =
-	kings[0] = kings[1] = 0;
-	pawns[0] = pawns[1] = 16;
+	kings[0] = kings[1] =
+	pawns[0] = pawns[1] = 0;
 
 	for (i = 0; i < 64; ++i)
 		{
 		board[i] = initial_board[i];
 		if (board[i] != 4)
 			material[board[i]%2] += piece_values[board[i]];
+		if (board[i] == 0) ++pawns[0];
+		if (board[i] == 1) ++pawns[1];
 		if (board[i] == 2) ++kings[0];
 		if (board[i] == 3) ++kings[1];
 		}
@@ -240,7 +253,7 @@ void memory_report()
 
 void move_list_push(MOVE * move)
 	{
-	sprintf(move_list[move_list_counter], "%s-%s", notation[move->from], notation[move->to]);
+	sprintf(move_list[move_list_counter], "%s%c%s", notation[move->from], move->captured==-1?'-':'x', notation[move->to]);
 	++move_list_counter;
 	}
 
