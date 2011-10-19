@@ -147,3 +147,18 @@
              important improvement would be avoiding draw such as making
              repeating moves when alternate moves of similar quality are
              available...
+2011-10-18 - For the past month or so, I've been working on a better web
+             front-end, and, perhaps more importantly, endgame tablebases.
+             The latter I ended up doing backwards, by trial and error,
+             and in a general bone-headed way.  But eventually I got them
+             to work :D  I started with a wld approach thinking it would
+             be the only one feasible with a small space footprint (I am
+             too lazy to muck around with mirroring and such, which, BTW,
+             would be of great benefit so perhaps that's next) and then
+             developed a dtm approach; in the process I actually learned
+             the endgame principle for this game :)  The effort was a
+             couple of hours per week, maybe more than that; I have never
+             done retrograde analysis before.  The 3-piece DTM weighs in
+             around ~200MB (again, this can be reduced dramatically by
+             just using symmetry principles) but compresses down thanks
+             to a LZO library I snagged :)
