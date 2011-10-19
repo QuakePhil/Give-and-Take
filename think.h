@@ -310,7 +310,7 @@ MOVE think(int ply, int depth, double * ttl, int * victory)
 			,node_counter
 			,(t2-t1)>1?((double)node_counter)/(t2-t1):node_counter);
 		if (a > 20000)
-			printf(" W%-4d ", a-20127);
+			printf(" W%-4d ", 20127-a);
 		else if (a < -20000)
 			printf(" L%-4d ", a+20127);
 		else
