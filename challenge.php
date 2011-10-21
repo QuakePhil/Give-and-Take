@@ -5,56 +5,52 @@ date_default_timezone_set('America/New_York');
 $self = explode('/', $_SERVER['PHP_SELF']);
 $self = $self[1];
 
-session_name($self);
+session_name($self.'_challenge');
 
 session_start();
 
+if ($_GET['a'] == 'leave')
+	{
+	$_SESSION['challenger'] = false;
+	header('Location: index.php');
+	die();
+	}
+
+if ($_POST['challenger'])
+	{
+	$c = strtolower($_POST['challenger']);
+	$allow = 'abcdefghijklmnopqrstuvwxyz';
+	for ($i = 0; $i < strlen($c); ++$i)
+		if (strpos($allow, $c{$i}) !== false)
+			$c2 .= $c{$i};
+	$_SESSION['challenger'] = ucfirst($c2);
+	}
+
+if (!$_SESSION['challenger'])
+	{
+	print "Challenger, enter your name: ";
+	print "<form method=post action=challenge.php><input name=challenger type=text><input type=submit></form>";
+	die();
+	}
+
+$goodluck = 0;
 if (!$_SESSION['gamefile'] || $_POST['act'] == 'new')
 	{
+	$goodluck = 1;
+	$_SESSION['evaluation'] = 0;
+	$_SESSION['strength'] = 9;
+	$_SESSION['timelimit'] = 10;
 	$_SESSION['eng'] = './gnt';
-	$_SESSION['gamefile'] = 'game_'.$_SERVER['REMOTE_ADDR'].'_'.date('Ymd_his').'.pdn';
+	$_SESSION['gamefile'] = 'challenge/'.$_SESSION['challenger'].'-'.$_SERVER['REMOTE_ADDR'].'-vs-gnt_'.date('Ymd_his').'.pdn';
 	}
 
 $t1 = microtime(true);
 
-if ($_POST['act'] == 'comment')
-	{
-	$comments = unserialize(file_get_contents('comments.txt'));
-	$comments[] = array($_SERVER['REMOTE_ADDR'], time(), $_POST['n'], $_POST['c']);
-	$h = fopen('comments.txt', 'w');
-	fwrite($h, serialize($comments));
-	fclose($h);
-	print "<script>location.href='index.php';</script>";
-	die();
-	}
-
 $gamefile = $_SESSION['gamefile'];
-
-if ($_GET['act'] == 'hint')
-	{
-	$e = popen($cmd = "./gnt pdn play $gamefile hint 9 1", 'r');
-	fwrite($e, "quit\n");
-	while (!feof($e))
-		{
-		$out .= fread($e, 1024);
-		}
-	fclose($e);
-	print substr($out, strpos($out, 'bestmove') + 9, 5);
-	die();
-	}
 
 ?>
 <script type="text/javascript" src="http://code.jquery.com/jquery-latest.pack.js"></script>
 <script>
-function hint()
-	{
-	$.get('index.php?act=hint', function(data)
-		{
-		alert(data);
-		});
-	return false;
-	}
-
 function cell(str)
 	{
 	document.getElementById('cellspan').innerHTML = 'Cell: ' + str;
@@ -77,7 +73,7 @@ function move(str)
 			}
 		else
 			{
-			document.getElementById('movespan').innerHTML = 'Move: ' + movefrom + ' to ' + str;
+			document.getElementById('movespan').innerHTML = 'Move: ' + movefrom + '-' + str;
 			// location.href='/<?php echo $self ?>/?m='+movefrom+'-'+str;
 			$('#m').val(movefrom+'-'+str);
 			$('#game').submit();
@@ -86,12 +82,10 @@ function move(str)
 		}
 	}
 </script>
-Welcome to the practice room.<br/>
-Once you are ready, face my strongest <a href=challenge.php>challenge</a>!<br/>
-<a target=_blank href=rules.html>Rules</a>&nbsp;&nbsp;&nbsp;
-<span id="cellspan">Cell: --</span>&nbsp;&nbsp;&nbsp;
-<span id="movespan">Move: --</span>
 <?php
+if ($goodluck) print "This is the Give and Take challenge.<br/>
+You have the first move.  Can you beat your opponent?<br/>
+Good luck!<br/>";
 
 $initial_board = '4444444411111111111111114444444444444444000000000000000044444444'; 
 
@@ -136,19 +130,6 @@ if (!file_exists($gamefile))
 	chmod($gamefile, 0777);
 	}
 
-if ($_POST['act'] == 'undo')
-	{
-	$file = file_get_contents($gamefile);
-	$h = fopen($gamefile, 'w');
-	fwrite($h, substr(trim($file), 0, -5));
-	fclose($h);
-	}
-
-if ($_POST['act'] == 'extra')
-	{
-	$_SESSION['extra'] = !$_SESSION['extra'];
-	}
-
 $out = '';
 $move = '';
 if ($_POST['m'])
@@ -164,15 +145,6 @@ if ($_POST['m'])
 	}
 else if ($_POST['act'] != 'continue')
 	$move = 'just_show_the_board';
-
-$strength['1'] = 'Easy';
-$strength['9'] = 'Standard';
-$engs['1'] = './gntez';
-$engs['9'] = './gnt';
-
-$timelimit['1'] = '1s';
-$timelimit['5'] = '5s';
-$timelimit['10'] = '10s';
 
 if ($strength[$_POST['strength']])
 	{
@@ -213,7 +185,56 @@ if (!$board)
 	}
 $pieces = array('r','R','k','K','-');
 
-print $side;
+//print $side;
+
+$out_lines = explode("\n", $out);
+foreach ($out_lines as $line)
+	{
+	if ($capture_eval)
+		{
+		$eval = trim(substr($line, 40, 8));
+		if ($eval{0} == 'W' || $eval{0} == 'L' || strpos($eval, '.') !== false)
+			$_SESSION['evaluation'] = $eval;
+		}
+	if (strpos($line, 'ply/quiesce') !== false)
+		$capture_eval = true;
+	if (strpos($line, 'bestmove') !== false)
+		$bestmove = $line;
+	}
+
+if ($bestmove)
+	{
+	$bestmove = explode(' ', $bestmove);
+	print "Opponent's move: ".$bestmove[1]."<br/>";
+	}
+
+print "Opponent: <font size=\"+2\" title=\"".$_SESSION['evaluation']."\">";
+
+if ($_SESSION['evaluation'] > -0.5 && $_SESSION['evaluation'] < .5)
+	print ":-|";
+else if ($_SESSION['evaluation'] > 0)
+	{
+	if ($_SESSION['evaluation'] < 2)
+		print ":-)";
+	else if ($_SESSION['evaluation'] < 200)
+		print ":-D";
+	else
+		print ":-P";
+	}
+else if ($_SESSION['evaluation'] < 0)
+	{
+	if ($_SESSION['evaluation'] > -2)
+		print ":-/";
+	else if ($_SESSION['evaluation'] > -200)
+		print ":-(";
+	else
+		print ":-X";
+	}
+else
+	print ":-?";
+print "</font><br/>";
+
+
 
 $flip = $_POST['flip'];
 
@@ -232,6 +253,7 @@ else
 	$i_inc = 1;
 	$i_tr_start = 0;	$i_tr_end = 7;
 	}
+
 
 print "<table border=0 cellpadding=0 cellspacing=0>";
 
@@ -263,26 +285,17 @@ print "<td></td></tr>";
 
 print "</table>";
 
-print "<form method=post action=index.php id=game>
-Strength: <select name=strength>";
-foreach ($strength as $strength_val => $strength_name)
-	print "<option value=$strength_val".
-		($_SESSION['strength']==$strength_val?' selected=selected':'')
-		.">$strength_name</option>";
-print "</select> CPU time: <select name=timelimit>";
-foreach ($timelimit as $timelimit_val => $timelimit_name)
-	print "<option value=$timelimit_val".
-		($_SESSION['timelimit']==$timelimit_val?' selected=selected':'')
-		.">$timelimit_name</option>";
-print "</select><br/>
+print "<form method=post action=challenge.php id=game>
 <input type=hidden name=m value=\"\" id=m>
-<input type=submit name=act value=continue>
 <input type=submit name=act value=new>
-<input type=submit name=act value=undo>
-<input type=button name=act value=hint onclick=\"javascript:return hint()\">
-<input type=submit name=act value=extra>
 </form>
 ";
+
+?><span id="cellspan">Cell: --</span>&nbsp;&nbsp;&nbsp;
+<span id="movespan">Move: --</span><br/><?php
+
+print "Challenger: ".$_SESSION['challenger']."<br/>";
+print "<a href=challenge.php?a=leave>Exit challenge</a>";
 
 if (strpos($out, 'bestmove') === false && trim($_POST['m']) && strpos($out, 'move') !== false)
 	{
@@ -295,35 +308,5 @@ if (strpos($out, 'bestmove') === false && trim($_POST['m']) && strpos($out, 'mov
 			print $valid_move[2] . "\\n";
 			}
 	print "And that's it!\");</script>";
-	}
-if ($_SESSION['extra']) print "<pre>$cmd<hr>$out</pre>";
-
-//if ($_SESSION['extra'])
-	{
-print "<hr>Comments: ";
-print "<form method=post action=index.php>
-Name: <input type=text name=n><br>
-<textarea name=c rows=10 cols=40></textarea><br>
-<input type=submit name=act value=comment>";
-	}
-print "</form>";
-
-//if ($_SESSION['extra'])
-	{
-	$comments = unserialize(file_get_contents('comments.txt'));
-	if ($comments) foreach ($comments as $comment)
-		{
-		list ($ip, $time, $name, $text) = $comment;
-		$name = strip_tags($name);
-		$text = stripslashes(strip_tags($text));
-		if (trim(strip_tags($text)))
-			$comments2[$time][] = "<hr>$name (".date('m/d/Y', $time).")<br>".strip_tags($text);
-		}
-
-	krsort($comments2);
-	foreach ($comments2 as $time => $lines) foreach ($lines as $line)
-		print $line;
-
-	print "<hr>".(microtime(true)-$t1);
 	}
 ?>
